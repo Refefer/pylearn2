@@ -769,7 +769,7 @@ class MLP(Layer):
 
     def dropout_fprop(self, state_below, default_input_include_prob=0.5,
                       input_include_probs=None, default_input_scale=2.,
-                      input_scales=None, per_example=True):
+                      input_scales=None, per_example=True, return_all=False):
         """
         Returns the output of the MLP, when applying dropout to the input and
         intermediate layers.
@@ -786,6 +786,8 @@ class MLP(Layer):
         per_example : bool, optional
             Sample a different mask value for every example in a batch.
             Defaults to `True`. If `False`, sample one mask per mini-batch.
+        return_all : Whether to return only the final state or all of the
+            intermediary states.
 
 
         Notes
@@ -813,6 +815,7 @@ class MLP(Layer):
 
         theano_rng = MRG_RandomStreams(max(self.rng.randint(2 ** 15), 1))
 
+        states = []
         for layer in self.layers:
             layer_name = layer.layer_name
 
@@ -835,7 +838,12 @@ class MLP(Layer):
                 input_space=layer.get_input_space(),
                 per_example=per_example
             )
+
             state_below = layer.fprop(state_below)
+            states.append(state_below)
+
+        if return_all:
+            return states
 
         return state_below
 
