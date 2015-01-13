@@ -61,11 +61,13 @@ class pylearn2_install(install):
             if mode is not None:
                 print("Please try again")
             mode = input("Installation mode: [develop]/install/cancel: ")
+
         if mode in ['', 'develop']:
             self.distribution.run_command('develop')
+
         if mode == 'install':
             return install.run(self)
-cmdclass.update({'install': pylearn2_install})
+#cmdclass.update({'install': pylearn2_install})
 
 setup(
     cmdclass=cmdclass,
