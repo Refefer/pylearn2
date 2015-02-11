@@ -4336,8 +4336,12 @@ class FlattenerLayer(Layer):
             assert str(owner.op) == 'Join'
             # First input to join op in the axis.
             raw_state = tuple(owner.inputs[1:])
-            raw_space.validate(raw_state)
-            state = raw_state
+            state = ()
+            for st,sp in safe_izip(raw_state, raw_space.components):
+                dim = sp.get_total_dimension()
+                state += (VectorSpace(dim).format_as(st, sp),)
+
+            raw_space.validate(state)
         else:
             # Format state as layer output space.
             state = self.get_output_space().format_as(state, raw_space)
