@@ -4073,17 +4073,19 @@ class CompositeLayer(Layer):
             if not isinstance(inputs_to_layers, dict):
                 raise TypeError("CompositeLayer expected inputs_to_layers to "
                                 "be dict, got " + str(type(inputs_to_layers)))
+
             self.inputs_to_layers = OrderedDict()
-            for key in sorted(inputs_to_layers):
-                assert isinstance(key, py_integer_types)
-                assert 0 <= key < self.num_layers
-                value = inputs_to_layers[key]
-                assert is_iterable(value)
-                assert all(isinstance(v, py_integer_types) for v in value)
+            for input_idx in sorted(inputs_to_layers):
+                assert isinstance(input_idx, py_integer_types)
+                layer_idxs = inputs_to_layers[input_idx]
+                assert is_iterable(layer_idxs)
+                assert all(isinstance(v, py_integer_types) for v in layer_idxs)
                 # Check 'not value' to support case of empty list
-                assert not value or all(0 <= v < self.num_layers
-                                        for v in value)
-                self.inputs_to_layers[key] = sorted(value)
+                print input_idx, layer_idxs
+                assert not layer_idxs or \
+                    all(0 <= v < self.num_layers for v in layer_idxs)
+                self.inputs_to_layers[input_idx] = sorted(layer_idxs)
+
         super(CompositeLayer, self).__init__()
         self.__dict__.update(locals())
 
@@ -4112,20 +4114,24 @@ class CompositeLayer(Layer):
                                  "layers.")
             # Invert the dictionary
             self.layers_to_inputs = OrderedDict()
-            for i in xrange(self.num_layers):
+            for layer_idx in xrange(self.num_layers):
                 inputs = []
-                for j in xrange(len(space.components)):
-                    if j in self.inputs_to_layers:
-                        if i in self.inputs_to_layers[j]:
-                            inputs.append(j)
+                for input_idx in xrange(len(space.components)):
+                    if input_idx in self.inputs_to_layers:
+                        if layer_idx in self.inputs_to_layers[input_idx]:
+                            inputs.append(input_idx)
+
                     else:
-                        inputs.append(j)
-                self.layers_to_inputs[i] = inputs
+                        inputs.append(input_idx)
+
+                self.layers_to_inputs[layer_idx] = inputs
+
         for i, layer in enumerate(self.layers):
             if self.routing_needed and i in self.layers_to_inputs:
                 cur_space = space.restrict(self.layers_to_inputs[i])
             else:
                 cur_space = space
+
             layer.set_input_space(cur_space)
 
         self.input_space = space
@@ -4139,6 +4145,7 @@ class CompositeLayer(Layer):
         rval = []
         for layer in self.layers:
             rval = safe_union(layer.get_params(), rval)
+
         return rval
 
     @wraps(Layer.fprop)
@@ -4305,7 +4312,7 @@ class FlattenerLayer(Layer):
         super(FlattenerLayer, self).__init__()
         self.__dict__.update(locals())
         del self.self
-        self.layer_name = raw_layer.layer_name
+        self.layer_name = raw_layer.layer_name + "_flattener"
 
     @wraps(Layer.set_input_space)
     def set_input_space(self, space):
@@ -4337,7 +4344,7 @@ class FlattenerLayer(Layer):
             # First input to join op in the axis.
             raw_state = tuple(owner.inputs[1:])
             state = ()
-            for st,sp in safe_izip(raw_state, raw_space.components):
+            for st, sp in safe_izip(raw_state, raw_space.components):
                 dim = sp.get_total_dimension()
                 state += (VectorSpace(dim).format_as(st, sp),)
 
