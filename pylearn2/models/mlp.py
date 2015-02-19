@@ -4150,7 +4150,14 @@ class CompositeLayer(Layer):
     @wraps(Layer.fprop)
     def fprop(self, state_below):
         rvals = []
-        for i, layer in enumerate(self.layers):
+        states = self.state_maps(state_below)
+        for cur_state_below, layer in safe_izip(states, self.layers):
+            rvals.append(layer.fprop(cur_state_below))
+
+        return tuple(rvals)
+
+    def state_maps(self, state_below):
+        for i in xrange(self.num_layers):
             if self.routing_needed and i in self.layers_to_inputs:
                 cur_state_below = [state_below[j]
                                    for j in self.layers_to_inputs[i]]
@@ -4162,9 +4169,7 @@ class CompositeLayer(Layer):
             else:
                 cur_state_below = state_below
 
-            rvals.append(layer.fprop(cur_state_below))
-
-        return tuple(rvals)
+            yield cur_state_below
 
     def _weight_decay_aggregate(self, method_name, coeff):
         if isinstance(coeff, py_float_types):
@@ -4243,20 +4248,11 @@ class CompositeLayer(Layer):
                                       state=None, targets=None):
         rval = OrderedDict()
         # TODO: reduce redundancy with fprop method
-        for i, layer in enumerate(self.layers):
-            if self.routing_needed and i in self.layers_to_inputs:
-                cur_state_below = [state_below[j]
-                                   for j in self.layers_to_inputs[i]]
-                # This is to mimic the behavior of CompositeSpace's restrict
-                # method, which only returns a CompositeSpace when the number
-                # of components is greater than 1
-                if len(cur_state_below) == 1:
-                    cur_state_below, = cur_state_below
-            else:
-                cur_state_below = state_below
+        states = self.state_maps(state_below)
+        for i, (cur_state_below, layer) in enumerate(safe_izip(states, self.layers)):
 
-            cur_state = state if state is None else cur_state_below[i]
-            targets = targets if targets is None else cur_targets[i]
+            cur_state = state if state is None else state[i]
+            cur_targets = targets if targets is None else targets[i]
 
             d = layer.get_layer_monitoring_channels(
                 cur_state_below, cur_state, cur_targets)
