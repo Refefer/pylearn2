@@ -4162,7 +4162,9 @@ class CompositeLayer(Layer):
                     cur_state_below, = cur_state_below
             else:
                 cur_state_below = state_below
+
             rvals.append(layer.fprop(cur_state_below))
+
         return tuple(rvals)
 
     def _weight_decay_aggregate(self, method_name, coeff):
@@ -4335,20 +4337,25 @@ class FlattenerLayer(Layer):
 
         raw_space = self.raw_layer.get_output_space()
 
-        if isinstance(raw_space, CompositeSpace):
-            # Pick apart the Join that fprop used to make state.
-            assert hasattr(state, 'owner')
-            owner = state.owner
-            assert owner is not None
-            assert str(owner.op) == 'Join'
-            # First input to join op in the axis.
-            raw_state = tuple(owner.inputs[1:])
-            state = ()
-            for st, sp in safe_izip(raw_state, raw_space.components):
-                dim = sp.get_total_dimension()
-                state += (VectorSpace(dim).format_as(st, sp),)
+        if isinstance(raw_space, CompositeSpace) :
+            if len(raw_space.components) > 1:
+                # Pick apart the Join that fprop used to make state.
+                assert hasattr(state, 'owner')
+                owner = state.owner
+                assert owner is not None
+                assert str(owner.op) == 'Join'
+                # First input to join op in the axis.
+                raw_state = tuple(owner.inputs[1:])
+                state = ()
+                for st, sp in safe_izip(raw_state, raw_space.components):
+                    dim = sp.get_total_dimension()
+                    state += (VectorSpace(dim).format_as(st, sp),)
 
-            raw_space.validate(state)
+                raw_space.validate(state)
+            else:
+                raw_space_c = raw_space.components[0]
+                state = self.get_output_space().format_as(state, raw_space_c),
+
         else:
             # Format state as layer output space.
             state = self.get_output_space().format_as(state, raw_space)
@@ -4356,6 +4363,7 @@ class FlattenerLayer(Layer):
         if targets is not None:
             targets = self.get_target_space().format_as(
                 targets, self.raw_layer.get_target_space())
+
         return self.raw_layer.get_layer_monitoring_channels(
             state_below=state_below,
             state=state,
@@ -4399,8 +4407,12 @@ class FlattenerLayer(Layer):
 
         raw = self.raw_layer.fprop(state_below)
 
-        return self.raw_layer.get_output_space().format_as(raw,
-                                                           self.output_space)
+        output_space = self.raw_layer.get_output_space()
+        if len(output_space.components) == 1:
+            output_space = output_space.components[0]
+            raw, = raw
+
+        return output_space.format_as(raw, self.output_space)
 
     @wraps(Layer.cost)
     def cost(self, Y, Y_hat):
