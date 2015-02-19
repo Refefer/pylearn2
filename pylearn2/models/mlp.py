@@ -12,6 +12,7 @@ import math
 import operator
 import sys
 import warnings
+from itertools import izip
 
 import numpy as np
 from theano.compat import six
@@ -4151,7 +4152,7 @@ class CompositeLayer(Layer):
     def fprop(self, state_below):
         rvals = []
         states = self.state_maps(state_below)
-        for cur_state_below, layer in safe_izip(states, self.layers):
+        for cur_state_below, layer in izip(states, self.layers):
             rvals.append(layer.fprop(cur_state_below))
 
         return tuple(rvals)
@@ -4249,7 +4250,7 @@ class CompositeLayer(Layer):
         rval = OrderedDict()
         # TODO: reduce redundancy with fprop method
         states = self.state_maps(state_below)
-        for i, (cur_state_below, layer) in enumerate(safe_izip(states, self.layers)):
+        for i, (cur_state_below, layer) in enumerate(izip(states, self.layers)):
 
             cur_state = state if state is None else state[i]
             cur_targets = targets if targets is None else targets[i]
