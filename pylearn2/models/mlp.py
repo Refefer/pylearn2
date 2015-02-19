@@ -4256,15 +4256,8 @@ class CompositeLayer(Layer):
             else:
                 cur_state_below = state_below
 
-            if state is not None:
-                cur_state = state[i]
-            else:
-                cur_state = None
-
-            if targets is not None:
-                cur_targets = targets[i]
-            else:
-                cur_targets = None
+            cur_state = state if state is None else cur_state[i]
+            targets = targets if targets is None else cur_targets[i]
 
             d = layer.get_layer_monitoring_channels(
                 cur_state_below, cur_state, cur_targets)
@@ -4284,12 +4277,15 @@ class CompositeLayer(Layer):
 
         return get_lr_scalers_from_layers(self)
 
-
 class FlattenerLayer(Layer):
 
     """
     A wrapper around a different layer that flattens
-    the original layer's output.
+    the original layer's output.  By flatten, it really only needs
+    to do that if more than one channel is output, otherwise it
+    simply outputs the remaining layer.  This is largely a work around
+    for multiple reshapings resulting in Theano complaining about
+    graph cycles.
 
     The cost works by unflattening the target and then
     calling the wrapped Layer's cost.
@@ -4320,8 +4316,14 @@ class FlattenerLayer(Layer):
     def set_input_space(self, space):
 
         self.raw_layer.set_input_space(space)
-        total_dim = self.raw_layer.get_output_space().get_total_dimension()
-        self.output_space = VectorSpace(total_dim)
+        output_space = self.raw_layer.get_output_space()
+        self.output_channels = len(output_space.components)
+
+        if self.output_channels == 1:
+            self.output_space = output_space.components[0]
+        else:
+            total_dim = output_space.get_total_dimension()
+            self.output_space = VectorSpace(total_dim)
 
     @wraps(Layer.get_input_space)
     def get_input_space(self):
@@ -4335,10 +4337,11 @@ class FlattenerLayer(Layer):
     def get_layer_monitoring_channels(self, state_below=None,
                                       state=None, targets=None):
 
+        return OrderedDict([])
         raw_space = self.raw_layer.get_output_space()
 
         if isinstance(raw_space, CompositeSpace) :
-            if len(raw_space.components) > 1:
+            if self.output_channels > 1:
                 # Pick apart the Join that fprop used to make state.
                 assert hasattr(state, 'owner')
                 owner = state.owner
@@ -4354,7 +4357,9 @@ class FlattenerLayer(Layer):
                 raw_space.validate(state)
             else:
                 raw_space_c = raw_space.components[0]
-                state = self.get_output_space().format_as(state, raw_space_c),
+                os = self.get_output_space()
+                os.validate(state)
+                state = os.format_as(state, raw_space_c),
 
         else:
             # Format state as layer output space.
@@ -4407,16 +4412,21 @@ class FlattenerLayer(Layer):
 
         raw = self.raw_layer.fprop(state_below)
 
-        output_space = self.raw_layer.get_output_space()
-        if len(output_space.components) == 1:
-            output_space = output_space.components[0]
-            raw, = raw
+        if self.output_channels == 1:
+            output_space = self.output_space
+            state, = raw
+            output_space.validate(state)
+        else:
+            output_space = self.raw_layer.get_output_space()
+            output_space.validate(raw)
+            state = output_space.format_as(raw, self.output_space)
 
-        return output_space.format_as(raw, self.output_space)
+        self.output_space.validate(state)
+        return state
 
     @wraps(Layer.cost)
     def cost(self, Y, Y_hat):
-
+        raise NotImplementedError("Need to wire up.") 
         raw_space = self.raw_layer.get_output_space()
         target_space = self.output_space
         raw_Y = target_space.format_as(Y, raw_space)
@@ -4449,7 +4459,6 @@ class FlattenerLayer(Layer):
     def get_weights(self):
 
         return self.raw_layer.get_weights()
-
 
 class WindowLayer(Layer):
 
