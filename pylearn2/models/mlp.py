@@ -4081,7 +4081,6 @@ class CompositeLayer(Layer):
                 assert is_iterable(layer_idxs)
                 assert all(isinstance(v, py_integer_types) for v in layer_idxs)
                 # Check 'not value' to support case of empty list
-                print input_idx, layer_idxs
                 assert not layer_idxs or \
                     all(0 <= v < self.num_layers for v in layer_idxs)
                 self.inputs_to_layers[input_idx] = sorted(layer_idxs)
@@ -4256,7 +4255,7 @@ class CompositeLayer(Layer):
             else:
                 cur_state_below = state_below
 
-            cur_state = state if state is None else cur_state[i]
+            cur_state = state if state is None else cur_state_below[i]
             targets = targets if targets is None else cur_targets[i]
 
             d = layer.get_layer_monitoring_channels(
