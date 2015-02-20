@@ -24,7 +24,7 @@ class TransformerDataset(Dataset):
     """
 
     def __init__(self, raw, transformer, cpu_only=False,
-                 space_preserving=False):
+                 space_preserving=False, transform_source='features'):
         """
             .. todo::
 
@@ -51,6 +51,7 @@ class TransformerDataset(Dataset):
             X, y = raw
         else:
             X = raw
+
         X = self.transformer.perform(X)
         if include_labels:
             return X, y
@@ -91,8 +92,10 @@ class TransformerDataset(Dataset):
         if data_specs is not None:
             assert is_flat_specs(data_specs)
             space, source = data_specs
+
             if not isinstance(source, tuple):
                 source = (source,)
+
             if isinstance(space, CompositeSpace):
                 space = tuple(space.components)
             else:
@@ -100,12 +103,13 @@ class TransformerDataset(Dataset):
 
             # Put 'features' first, as this is what TransformerIterator
             # is expecting
-            if 'features' not in source:
+            if self.transform_source not in source:
                 # 'features is not needed, get things directly from
                 # the original data
                 raw_data_specs = data_specs
+                source_idx = None
             else:
-                feature_idx = source.index('features')
+                feature_idx = source.index(self.transform_source)
                 if self.space_preserving:
                     # Ask self.raw for the data in the expected space,
                     # and self.transformer will operate in that space
@@ -117,7 +121,7 @@ class TransformerDataset(Dataset):
                 raw_space = CompositeSpace((feature_input_space,)
                                            + space[:feature_idx]
                                            + space[feature_idx + 1:])
-                raw_source = (('features',)
+                raw_source = ((self.transform_source,)
                               + source[:feature_idx]
                               + source[feature_idx + 1:])
                 raw_data_specs = (raw_space, raw_source)
