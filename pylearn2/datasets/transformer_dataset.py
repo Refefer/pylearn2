@@ -107,7 +107,6 @@ class TransformerDataset(Dataset):
                 # 'features is not needed, get things directly from
                 # the original data
                 raw_data_specs = data_specs
-                source_idx = None
             else:
                 feature_idx = source.index(self.transform_source)
                 if self.space_preserving:
@@ -149,7 +148,7 @@ class TransformerDataset(Dataset):
     def adjust_for_viewer(self, X):
         """
         .. todo::
-
+ 
             WRITEME
         """
         if self.space_preserving:
@@ -209,6 +208,13 @@ class TransformerIterator(Iterator):
         self.uneven = raw_iterator.uneven
         self.data_specs = data_specs
 
+        if self.transformer_dataset.space_preserving:
+            # If the space is preserved, then raw_batch is already provided
+            # in the requested space
+            self.rval_space = out_space
+        else:
+            self.rval_space = transformer.get_output_space()
+
     def __iter__(self):
         """
         .. todo::
@@ -216,6 +222,17 @@ class TransformerIterator(Iterator):
             WRITEME
         """
         return self
+
+    def transform(self, X_batch):
+        """
+        Applies the transform on the input batch, converting the
+        output space to the requested one as needed.
+        """
+        rval = self.transformer_dataset.transformer.perform(X_batch)
+        if rval_space != out_space:
+            rval = self.rval_space.np_format_as(rval, out_space)
+
+        return rval
 
     def __next__(self):
         """
@@ -232,25 +249,12 @@ class TransformerIterator(Iterator):
         if isinstance(out_space, CompositeSpace):
             out_space = out_space.components[0]
 
-        if self.transformer_dataset.space_preserving:
-            # If the space is preserved, then raw_batch is already provided
-            # in the requested space
-            rval_space = out_space
-        else:
-            rval_space = transformer.get_output_space()
-
-        def transform(X_batch):
-            rval = transformer.perform(X_batch)
-            if rval_space != out_space:
-                rval = rval_space.np_format_as(rval, out_space)
-            return rval
-
         if not isinstance(raw_batch, tuple):
             # Only one source, return_tuple is False
-            rval = transform(raw_batch)
+            rval = self.transform(raw_batch)
         else:
             # Apply the transformer only on the first element
-            rval = (transform(raw_batch[0]),) + raw_batch[1:]
+            rval = (self.transform(raw_batch[0]),) + raw_batch[1:]
 
         return rval
 
