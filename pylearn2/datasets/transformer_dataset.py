@@ -208,9 +208,15 @@ class TransformerIterator(Iterator):
         self.uneven = raw_iterator.uneven
         self.data_specs = data_specs
 
+        # If the space is preserved, then raw_batch is already provided
+        # in the requested space
+        out_space = data_specs[0]
+        if isinstance(out_space, CompositeSpace):
+            out_space = out_space.components[0]
+
+        self.out_space = out_space
+
         if self.transformer_dataset.space_preserving:
-            # If the space is preserved, then raw_batch is already provided
-            # in the requested space
             self.rval_space = out_space
         else:
             self.rval_space = transformer.get_output_space()
@@ -229,7 +235,7 @@ class TransformerIterator(Iterator):
         output space to the requested one as needed.
         """
         rval = self.transformer_dataset.transformer.perform(X_batch)
-        if rval_space != out_space:
+        if self.rval_space != self.out_space:
             rval = self.rval_space.np_format_as(rval, out_space)
 
         return rval
@@ -244,11 +250,6 @@ class TransformerIterator(Iterator):
 
         # Apply transformation on raw_batch, and format it
         # in the requested Space
-        transformer = self.transformer_dataset.transformer
-        out_space = self.data_specs[0]
-        if isinstance(out_space, CompositeSpace):
-            out_space = out_space.components[0]
-
         if not isinstance(raw_batch, tuple):
             # Only one source, return_tuple is False
             rval = self.transform(raw_batch)
