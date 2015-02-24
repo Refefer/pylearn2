@@ -249,11 +249,32 @@ class Conv2D(OrigConv2D):
         """
         self._img_shape = tuple([batch_size] + list(self._img_shape[1:]))
 
+def make_conv2D(make_weights, input_space, output_space,
+               kernel_shape, batch_size=None,
+               subsample = (1,1), border_mode = 'valid',
+               message = ""):
+    """
+    .. todo::
 
-def make_random_conv2D(irange, input_space, output_space,
-                       kernel_shape, batch_size=None, \
-                       subsample = (1,1), border_mode = 'valid',
-                       message = "", rng = None):
+        WRITEME properly
+
+    Creates a Conv2D
+    """
+
+    W = make_weights(**locals())
+
+    return Conv2D(
+        filters=W,
+        batch_size=batch_size,
+        input_space=input_space,
+        output_axes=output_space.axes,
+        subsample=subsample, 
+        border_mode=border_mode,
+        filters_shape=W.get_value(borrow=True).shape, 
+        message=message
+    )
+
+def make_random_conv2D(irange, rng=None, *args, **kwargs):
     """
     .. todo::
 
@@ -262,23 +283,31 @@ def make_random_conv2D(irange, input_space, output_space,
     Creates a Conv2D with random kernels
     """
 
-    rng = make_np_rng(rng, default_seed, which_method='uniform')
+    def make_weights(input_space, output_space, kernel_shape, **kwargs):
+        rs = make_np_rng(rng, default_seed, which_method='uniform')
 
-    W = sharedX(rng.uniform(
-        -irange, irange,
-        (output_space.num_channels, input_space.num_channels,
-         kernel_shape[0], kernel_shape[1])
-    ))
+        shape = (output_space.num_channels, input_space.num_channels,
+             kernel_shape[0], kernel_shape[1])
 
-    return Conv2D(
-        filters=W,
-        batch_size=batch_size,
-        input_space=input_space,
-        output_axes=output_space.axes,
-        subsample=subsample, border_mode=border_mode,
-        filters_shape=W.get_value(borrow=True).shape, message=message
-    )
+        return sharedX(rs.uniform(-irange, irange, shape))
 
+    return make_conv2D(make_weights, *args, **kwargs)
+
+def make_normal_conv2d(istd, rng=None, *args, **kwargs):
+    """
+    Initializes a set of filters with a mean of zero and the
+    provided standard deviation.
+    """
+
+    def make_weights(input_space, output_space, kernel_shape, **kwargs):
+        rs = make_np_rng(rng, default_seed, which_method='normal')
+
+        shape = (output_space.num_channels, input_space.num_channels,
+             kernel_shape[0], kernel_shape[1])
+
+        return sharedX(rs.normal(0, istd, shape))
+
+    return make_conv2D(make_weights, *args, **kwargs)
 
 def make_sparse_random_conv2D(num_nonzero, input_space, output_space,
                               kernel_shape, batch_size, subsample=(1, 1),

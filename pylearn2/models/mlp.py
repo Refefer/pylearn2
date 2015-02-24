@@ -2925,6 +2925,7 @@ class ConvElemwise(Layer):
                  layer_name,
                  nonlinearity,
                  irange=None,
+                 istd=None,
                  border_mode='valid',
                  sparse_init=None,
                  include_prob=1.0,
@@ -2942,14 +2943,7 @@ class ConvElemwise(Layer):
                  monitor_style="classification"):
         super(ConvElemwise, self).__init__()
 
-        if (irange is None) and (sparse_init is None):
-            raise AssertionError("You should specify either irange or "
-                                 "sparse_init when calling the constructor of "
-                                 "ConvElemwise.")
-        elif (irange is not None) and (sparse_init is not None):
-            raise AssertionError("You should specify either irange or "
-                                 "sparse_init when calling the constructor of "
-                                 "ConvElemwise and not both.")
+        self._validate_init(irange, istd, sparse_init)
 
         if pool_type is not None:
             assert pool_shape is not None, (
@@ -2968,6 +2962,20 @@ class ConvElemwise(Layer):
             "detection or classification" % self.__class__.__name__)
         del self.self
 
+    def _validate_init(self, irange, istd, sparse_init):
+        print istd, irange, sparse_init
+        names = 'irange, istd, or sparse_init'
+        num = sum(v is not None for v in (irange, istd, sparse_init))
+        if num == 0:
+            raise AssertionError("You should specify one of %s "
+                                 "when calling the constructor of "
+                                 "ConvElemwise." % names)
+        elif num > 1:
+            raise AssertionError("You should specify one of %s "
+                                 "when calling the constructor of "
+                                 "ConvElemwise and not more." % names)
+
+
     def initialize_transformer(self, rng):
         """
         This function initializes the transformer of the class. Re-running
@@ -2978,25 +2986,32 @@ class ConvElemwise(Layer):
         rng : object
             random number generator object.
         """
+        kwargs = dict(
+            input_space=self.input_space,
+            output_space=self.detector_space,
+            kernel_shape=self.kernel_shape,
+            subsample=self.kernel_stride,
+            border_mode=self.border_mode,
+            rng=rng
+        )
+
         if self.irange is not None:
             assert self.sparse_init is None
-            self.transformer = conv2d.make_random_conv2D(
-                irange=self.irange,
-                input_space=self.input_space,
-                output_space=self.detector_space,
-                kernel_shape=self.kernel_shape,
-                subsample=self.kernel_stride,
-                border_mode=self.border_mode,
-                rng=rng)
+            f = conv2d.make_random_conv2D
+            kwargs['irange'] = self.irange
+
         elif self.sparse_init is not None:
-            self.transformer = conv2d.make_sparse_random_conv2D(
-                num_nonzero=self.sparse_init,
-                input_space=self.input_space,
-                output_space=self.detector_space,
-                kernel_shape=self.kernel_shape,
-                subsample=self.kernel_stride,
-                border_mode=self.border_mode,
-                rng=rng)
+            f = conv2d.make_sparse_random_conv2D
+            kwargs['num_nonzero'] = self.sparse_init
+
+        elif self.istd is not None:
+            f = conv2d.make_normal_conv2d
+            kwargs['istd'] = self.istd
+
+        else:
+            raise NotImplementedError()
+
+        self.transformer = f(**kwargs)
 
     def initialize_output_space(self):
         """
