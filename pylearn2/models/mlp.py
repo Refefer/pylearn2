@@ -3221,9 +3221,10 @@ class ConvElemwise(Layer):
 
         return rval
 
-    @wraps(Layer.fprop)
-    def fprop(self, state_below):
-
+    def _transform_z(self, state_below):
+        """
+        Applies the affine transform.
+        """
         self.input_space.validate(state_below)
 
         z = self.transformer.lmul(state_below)
@@ -3235,37 +3236,45 @@ class ConvElemwise(Layer):
         else:
             b = self.b.dimshuffle('x', 0, 1, 2)
 
-        z = z + b
-        d = self.nonlin.apply(z)
+        return z + b
 
-        if self.layer_name is not None:
-            d.name = self.layer_name + '_z'
-            self.detector_space.validate(d)
+    def _apply_nonlinearity(self, z):
+        """
+        Applies the non linearity.
+        """
+        return self.nonlin.apply(z)
 
-        if self.pool_type is not None:
-            if not hasattr(self, 'detector_normalization'):
-                self.detector_normalization = None
+    def _apply_pooling(self, d):
+        """
+        Applies pooling
+        """
+        if not hasattr(self, 'detector_normalization'):
+            self.detector_normalization = None
 
-            if self.detector_normalization:
-                d = self.detector_normalization(d)
+        if self.detector_normalization:
+            d = self.detector_normalization(d)
 
-            assert self.pool_type in ['max', 'mean'], ("pool_type should be"
-                                                       "either max or mean"
-                                                       "pooling.")
+        assert self.pool_type in ['max', 'mean'], ("pool_type should be"
+                                                   "either max or mean"
+                                                   "pooling.")
 
-            if self.pool_type == 'max':
-                p = max_pool(bc01=d, pool_shape=self.pool_shape,
-                             pool_stride=self.pool_stride,
-                             image_shape=self.detector_space.shape)
-            elif self.pool_type == 'mean':
-                p = mean_pool(bc01=d, pool_shape=self.pool_shape,
-                              pool_stride=self.pool_stride,
-                              image_shape=self.detector_space.shape)
+        if self.pool_type == 'max':
+            p = max_pool(bc01=d, pool_shape=self.pool_shape,
+                         pool_stride=self.pool_stride,
+                         image_shape=self.detector_space.shape)
+        elif self.pool_type == 'mean':
+            p = mean_pool(bc01=d, pool_shape=self.pool_shape,
+                          pool_stride=self.pool_stride,
+                          image_shape=self.detector_space.shape)
 
-            self.output_space.validate(p)
-        else:
-            p = d
+        self.output_space.validate(p)
 
+        return p
+
+    def _normalize_output(self, p):
+        """
+        Normalizes the output
+        """
         if not hasattr(self, 'output_normalization'):
             self.output_normalization = None
 
@@ -3273,6 +3282,20 @@ class ConvElemwise(Layer):
             p = self.output_normalization(p)
 
         return p
+
+    @wraps(Layer.fprop)
+    def fprop(self, state_below):
+        z = self._transform_z(state_below)
+
+        d = self._apply_nonlinearity(z)
+
+        if self.layer_name is not None:
+            d.name = self.layer_name + '_z'
+            self.detector_space.validate(d)
+
+        p = d if self.pool_type is None else self._apply_pooling(d)
+
+        return self._normalize_output(p)
 
     def cost(self, Y, Y_hat):
         """
