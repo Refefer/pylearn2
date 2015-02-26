@@ -78,6 +78,7 @@ class TransformerDataset(Dataset):
         X = self.get_batch_design(batch_size)
         if self.space_preserving:
             return self.raw.get_topological_view(X)
+
         return X.reshape(X.shape[0], X.shape[1], 1, 1)
 
     def iterator(self, mode=None, batch_size=None, num_batches=None,
@@ -208,19 +209,7 @@ class TransformerIterator(Iterator):
         self.uneven = raw_iterator.uneven
         self.data_specs = data_specs
 
-        # If the space is preserved, then raw_batch is already provided
-        # in the requested space
-        out_space = data_specs[0]
-        if isinstance(out_space, CompositeSpace):
-            out_space = out_space.components[0]
-
-        self.out_space = out_space
-
-        if self.transformer_dataset.space_preserving:
-            self.rval_space = out_space
-        else:
-            self.rval_space = transformer.get_output_space()
-
+        
     def __iter__(self):
         """
         .. todo::
@@ -240,12 +229,33 @@ class TransformerIterator(Iterator):
 
         return rval
 
+    def _setup(self):
+        if hasattr(self, 'rval_space'): return
+
+        # XXX: This sucks - We need to run this during the iteration because
+        # of the wonky way pylearn2 orders its iteration when setting up
+        # monitor channels
+        
+        out_space = self.data_specs[0]
+        if isinstance(out_space, CompositeSpace):
+            out_space = out_space.components[0]
+
+        self.out_space = out_space
+
+        # If the space is preserved, then raw_batch is already provided
+        # in the requested space
+        if self.transformer_dataset.space_preserving:
+            self.rval_space = out_space
+        else:
+            self.rval_space = self.transformer_dataset.transformer.get_output_space()
+
     def __next__(self):
         """
         .. todo::
 
             WRITEME
         """
+        self._setup()
         raw_batch = self.raw_iterator.next()
 
         # Apply transformation on raw_batch, and format it
