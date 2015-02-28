@@ -42,6 +42,7 @@ class TransformerDataset(Dataset):
         self._set_transform_space()
 
     def _set_transform_space(self):
+
         space, source = self.raw.get_data_specs()
 
         if not isinstance(source, tuple):
@@ -128,23 +129,16 @@ class TransformerDataset(Dataset):
                 raw_data_specs = data_specs
             else:
                 feature_idx = source.index(self.transform_source)
-                if self.space_preserving:
-                    # Ask self.raw for the data in the expected space,
-                    # and self.transformer will operate in that space
-                    feature_input_space = space[feature_idx]
-                else:
-                    # We need to ask the transformer what its input space is
-                    feature_input_space = self.transformer.get_input_space()
+                feature_input_space = self.transformer.get_input_space()
 
-                raw_space = CompositeSpace((feature_input_space,)
-                                           + space[:feature_idx]
+                raw_space = CompositeSpace(space[:feature_idx]
+                                           + (feature_input_space,)
                                            + space[feature_idx + 1:])
-                raw_source = ((self.transform_source,)
-                              + source[:feature_idx]
-                              + source[feature_idx + 1:])
+                raw_source = source 
                 raw_data_specs = (raw_space, raw_source)
         else:
             raw_data_specs = None
+            feature_idx = None
 
         raw_iterator = self.raw.iterator(
             mode=mode, batch_size=batch_size,
@@ -152,6 +146,7 @@ class TransformerDataset(Dataset):
             data_specs=raw_data_specs, return_tuple=return_tuple)
 
         final_iterator = TransformerIterator(raw_iterator, self,
+                                             feature_idx=feature_idx,
                                              data_specs=data_specs)
 
         return final_iterator
@@ -215,7 +210,7 @@ class TransformerIterator(Iterator):
         WRITEME
     """
 
-    def __init__(self, raw_iterator, transformer_dataset, data_specs):
+    def __init__(self, raw_iterator, transformer_dataset, feature_idx, data_specs):
         """
         .. todo::
 
@@ -223,11 +218,11 @@ class TransformerIterator(Iterator):
         """
         self.raw_iterator = raw_iterator
         self.transformer_dataset = transformer_dataset
+        self.feature_idx = feature_idx
         self.stochastic = raw_iterator.stochastic
         self.uneven = raw_iterator.uneven
         self.data_specs = data_specs
 
-        
     def __iter__(self):
         """
         .. todo::
@@ -243,7 +238,7 @@ class TransformerIterator(Iterator):
         """
         rval = self.transformer_dataset.transformer.perform(X_batch)
         if self.rval_space != self.out_space:
-            rval = self.rval_space.np_format_as(rval, out_space)
+            rval = self.rval_space.np_format_as(rval, self.out_space)
 
         return rval
 
@@ -256,16 +251,11 @@ class TransformerIterator(Iterator):
         
         out_space = self.data_specs[0]
         if isinstance(out_space, CompositeSpace):
-            out_space = out_space.components[0]
+            out_space = out_space.components[self.feature_idx]
 
         self.out_space = out_space
 
-        # If the space is preserved, then raw_batch is already provided
-        # in the requested space
-        if self.transformer_dataset.space_preserving:
-            self.rval_space = out_space
-        else:
-            self.rval_space = self.transformer_dataset.transformer.get_output_space()
+        self.rval_space = self.transformer_dataset.transformer.get_output_space()
 
     def __next__(self):
         """
@@ -282,8 +272,10 @@ class TransformerIterator(Iterator):
             # Only one source, return_tuple is False
             rval = self.transform(raw_batch)
         else:
+            rvals = list(raw_batch)
+            rvals[self.feature_idx] = self.transform(rvals[self.feature_idx])
             # Apply the transformer only on the first element
-            rval = (self.transform(raw_batch[0]),) + raw_batch[1:]
+            rval = tuple(rvals)
 
         return rval
 
