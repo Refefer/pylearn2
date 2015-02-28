@@ -39,6 +39,23 @@ class TransformerDataset(Dataset):
         """
         self.__dict__.update(locals())
         del self.self
+        self._set_transform_space()
+
+    def _set_transform_space(self):
+        space, source = self.raw.get_data_specs()
+
+        if not isinstance(source, tuple):
+            source = (source,)
+
+        if isinstance(space, CompositeSpace):
+            space = tuple(space.components)
+        else:
+            space = (space,)
+
+        assert self.transform_source in source
+        feature_idx = source.index(self.transform_source)
+        feature_input_space = space[feature_idx]
+        self.transformer.set_input_space(feature_input_space)
 
     def get_batch_design(self, batch_size, include_labels=False):
         """
@@ -55,6 +72,7 @@ class TransformerDataset(Dataset):
         X = self.transformer.perform(X)
         if include_labels:
             return X, y
+
         return X
 
     def get_test_set(self):
