@@ -109,6 +109,7 @@ class TransformerDataset(Dataset):
             WRITEME
         """
         # Build the right data_specs to query self.raw
+        feature_idx = None
         if data_specs is not None:
             assert is_flat_specs(data_specs)
             space, source = data_specs
@@ -121,8 +122,6 @@ class TransformerDataset(Dataset):
             else:
                 space = (space,)
 
-            # Put 'features' first, as this is what TransformerIterator
-            # is expecting
             if self.transform_source not in source:
                 # 'features is not needed, get things directly from
                 # the original data
@@ -138,7 +137,6 @@ class TransformerDataset(Dataset):
                 raw_data_specs = (raw_space, raw_source)
         else:
             raw_data_specs = None
-            feature_idx = None
 
         raw_iterator = self.raw.iterator(
             mode=mode, batch_size=batch_size,
