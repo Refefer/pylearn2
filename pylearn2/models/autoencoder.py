@@ -142,73 +142,97 @@ class Autoencoder(AbstractAutoencoder):
         to initialize the model parameters.
     """
 
-    def __init__(self, nvis, nhid, act_enc, act_dec,
-                 tied_weights=False, irange=1e-3, rng=9001):
+    def __init__(self, nhid, act_enc, act_dec,
+                 tied_weights=False, irange=1e-3, rng=9001,
+                 nvis=None):
         """
         WRITEME
         """
         super(Autoencoder, self).__init__()
-        assert nvis > 0, "Number of visible units must be non-negative"
-        assert nhid > 0, "Number of hidden units must be positive"
 
-        self.input_space = VectorSpace(nvis)
-        self.output_space = VectorSpace(nhid)
-
-        # Save a few parameters needed for resizing
-        self.nvis = nvis
         self.nhid = nhid
         self.irange = irange
         self.tied_weights = tied_weights
         self.rng = make_np_rng(rng, which_method="randn")
+
+        self.act_enc = self._resolve_callable(act_enc)
+        self.act_dec = self._resolve_callable(act_dec)
+
+        self.output_space = VectorSpace(nhid)
+        self._params = []
+
+    def set_input_space(self, input_space):
+        """
+        Use input spaces instead of setting visible units directly
+        """
+        total_dims = input_space.get_total_dimension()
+        self.input_space = input_space
+        self.desired_input_space = VectorSpace(dim=total_dims)
+
+        self.needs_reformat = input_space != self.desired_input_space
+        self._initialize_params(total_dims)
+
+    def format_enc(self, X): 
+        """Formats the input to the desired internal space"""
+        if self.needs_reformat:
+            X = self.input_space.format_as(X, self.desired_input_space)
+
+        return X
+
+    def format_dec(self, res):
+        """Formats the result to the desired output space"""
+        if self.needs_reformat:
+            res = self.desired_input_space.format_as(res, self.input_space)
+
+        return res 
+
+    def _initialize_params(self, nvis):
+        # Save a few parameters needed for resizing
+
+        self._initialize_hidden(nvis)
+        self._initialize_visible(nvis)
+        
+    def _initialize_hidden(self, nvis):
         self._initialize_hidbias()
-        if nvis > 0:
-            self._initialize_visbias(nvis)
-            self._initialize_weights(nvis)
-        else:
-            self.visbias = None
-            self.weights = None
+        self._initialize_weights(nvis)
 
-        seed = int(self.rng.randint(2 ** 30))
+        self._params.extend([
+            self.hidbias,
+            self.weights
+        ])
 
-        # why a theano rng? should we remove it?
-        self.s_rng = make_theano_rng(seed, which_method="uniform")
-
-        if tied_weights and self.weights is not None:
+    def _initialize_visible(self, nvis):
+        self._initialize_visbias(nvis)
+        if self.tied_weights and self.weights is not None:
             self.w_prime = self.weights.T
         else:
             self._initialize_w_prime(nvis)
 
-        def _resolve_callable(conf, conf_attr):
-            """
-            .. todo::
+        self._params.append(self.visbias)
 
-                WRITEME
-            """
-            if conf[conf_attr] is None or conf[conf_attr] == "linear":
-                return None
-            # If it's a callable, use it directly.
-            if hasattr(conf[conf_attr], '__call__'):
-                return conf[conf_attr]
-            elif (conf[conf_attr] in globals()
-                  and hasattr(globals()[conf[conf_attr]], '__call__')):
-                return globals()[conf[conf_attr]]
-            elif hasattr(tensor.nnet, conf[conf_attr]):
-                return getattr(tensor.nnet, conf[conf_attr])
-            elif hasattr(tensor, conf[conf_attr]):
-                return getattr(tensor, conf[conf_attr])
-            else:
-                raise ValueError("Couldn't interpret %s value: '%s'" %
-                                 (conf_attr, conf[conf_attr]))
-
-        self.act_enc = _resolve_callable(locals(), 'act_enc')
-        self.act_dec = _resolve_callable(locals(), 'act_dec')
-        self._params = [
-            self.visbias,
-            self.hidbias,
-            self.weights,
-        ]
         if not self.tied_weights:
             self._params.append(self.w_prime)
+
+    def _resolve_callable(self, activation):
+        """
+        .. todo::
+
+            WRITEME
+        """
+        if activation is None or activation == "linear":
+            return None
+
+        # If it's a callable, use it directly.
+        if hasattr(activation, '__call__'):
+            return activation
+
+        if isinstance(activation, basestring):
+            if hasattr(tensor.nnet, activation):
+                return getattr(tensor.nnet, activation)
+            elif hasattr(tensor, activation):
+                return getattr(tensor, activation)
+
+        raise ValueError("Couldn't interpret value: '%s'" % activation)
 
     def _initialize_weights(self, nvis, rng=None, irange=None):
         """
@@ -369,6 +393,7 @@ class Autoencoder(AbstractAutoencoder):
             minibatch(es) after encoding.
         """
         if isinstance(inputs, tensor.Variable):
+            inputs = self.format_enc(inputs)
             return self._hidden_activation(inputs)
         else:
             return [self.encode(v) for v in inputs]
@@ -396,7 +421,8 @@ class Autoencoder(AbstractAutoencoder):
         else:
             act_dec = self.act_dec
         if isinstance(hiddens, tensor.Variable):
-            return act_dec(self.visbias + tensor.dot(hiddens, self.w_prime))
+            res = act_dec(self.visbias + tensor.dot(hiddens, self.w_prime))
+            return self.format_dec(res)
         else:
             return [self.decode(v) for v in hiddens]
 
@@ -415,7 +441,6 @@ class Autoencoder(AbstractAutoencoder):
             WRITEME
         """
         return ['v', 'h']
-
 
 class DenoisingAutoencoder(Autoencoder):
     """
