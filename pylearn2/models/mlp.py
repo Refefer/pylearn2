@@ -20,13 +20,23 @@ from theano.compat.six.moves import reduce, xrange
 from theano import config
 from theano.gof.op import get_debug_values
 from theano.sandbox.rng_mrg import MRG_RandomStreams
+from theano.sandbox.cuda import cuda_enabled
+from theano.sandbox.cuda.dnn import dnn_available, dnn_pool
 from theano.tensor.signal.downsample import max_pool_2d
 import theano.tensor as T
 
 from pylearn2.compat import OrderedDict
 from pylearn2.costs.mlp import Default
 from pylearn2.expr.probabilistic_max_pooling import max_pool_channels
-from pylearn2.linear import conv2d
+
+if cuda_enabled and dnn_available():
+    try:
+        from pylearn2.linear import cudnn2d as conv2d
+    except ImportError:
+        from pylearn2.linear import conv2d
+else:
+    from pylearn2.linear import conv2d
+
 from pylearn2.linear.matrixmul import MatrixMul
 from pylearn2.model_extensions.norm_constraint import MaxL2FilterNorm
 from pylearn2.models.model import Model
@@ -3005,6 +3015,9 @@ class ConvElemwise(Layer):
             kwargs['num_nonzero'] = self.sparse_init
 
         elif self.istd is not None:
+            if dnn_available():
+                raise NotImplementedError("Need to implement istd with CuDNN")
+
             f = conv2d.make_normal_conv2d
             kwargs['istd'] = self.istd
 
