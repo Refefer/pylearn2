@@ -16,6 +16,7 @@ from theano.sandbox.cuda.basic_ops import gpu_contiguous, gpu_alloc_empty
 from pylearn2.packaged_dependencies.theano_linear.conv2d \
     import Conv2d as OrigConv2D
 
+from pylearn2.linear.conv2D import make_normal_conv2D, make_random_conv2D, make_sparse_random_conv2D
 from pylearn2.linear.linear_transform import LinearTransform as P2LT
 from pylearn2.utils import sharedX
 from pylearn2.utils.rng import make_np_rng
@@ -157,11 +158,11 @@ class Cudnn2D(OrigConv2D):
         self._img_shape = tuple([batch_size] + list(self._img_shape[1:]))
 
 def make_random_conv2D(irange, rng=None, *args, **kwargs):
-    return OrigConv2D.make_random_conv2D(irange, rng, cls=Cudnn2D, *args, **kwargs)
+    return make_random_conv2D(irange, rng, cls=Cudnn2D, *args, **kwargs)
 
 def make_normal_conv2D(istd, rng=None, *args, **kwargs):
-    return OrigConv2D.make_normal_conv2D(istd, rng, cls=Cudnn2D, *args, **kwargs)
+    return make_normal_conv2D(istd, rng, cls=Cudnn2D, *args, **kwargs)
 
 def make_sparse_random_conv2D(num_nonzero, rng=None, *args, **kwargs):
-    return OrigConv2D.make_sparse_random_conv2D(num_nonzero, rng, cls=Cudnn2D, *args, **kwargs)
+    return make_sparse_random_conv2D(num_nonzero, rng, cls=Cudnn2D, *args, **kwargs)
 
