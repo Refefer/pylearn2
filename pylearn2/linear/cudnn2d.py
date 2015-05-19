@@ -156,118 +156,12 @@ class Cudnn2D(OrigConv2D):
         """
         self._img_shape = tuple([batch_size] + list(self._img_shape[1:]))
 
+def make_random_conv2D(irange, rng=None, *args, **kwargs):
+    return OrigConv2D.make_random_conv2D(irange, rng, cls=Cudnn2D, *args, **kwargs)
 
-def make_random_conv2D(irange,
-                       input_space,
-                       output_space,
-                       kernel_shape,
-                       batch_size=None,
-                       subsample=(1, 1),
-                       border_mode = 'valid',
-                       message = "",
-                       rng = None):
-    """
-    .. todo::
+def make_normal_conv2D(istd, rng=None, *args, **kwargs):
+    return OrigConv2D.make_normal_conv2D(istd, rng, cls=Cudnn2D, *args, **kwargs)
 
-        WRITEME properly
+def make_sparse_random_conv2D(num_nonzero, rng=None, *args, **kwargs):
+    return OrigConv2D.make_sparse_random_conv2D(num_nonzero, rng, cls=Cudnn2D, *args, **kwargs)
 
-    Creates a CorrMM2D with random kernels
-
-    Parameters
-    ----------
-    irange : TODO
-    input_space : TODO
-    output_space : TODO
-    kernel_shape : 2D list or tuple
-    batch_size : int, optional
-    subsample : tuple, optional
-    border_mode : string, optional
-    message : string, optional
-    rng : optional
-    """
-
-    rng = make_np_rng(rng, default_seed, which_method='uniform')
-
-    W = sharedX(rng.uniform(-irange, irange, (output_space.num_channels,
-                                              input_space.num_channels,
-                                              kernel_shape[0],
-                                              kernel_shape[1])))
-
-    return Cudnn2D(
-        filters=W,
-        batch_size=batch_size,
-        input_space=input_space,
-        output_axes=output_space.axes,
-        subsample=tuple(subsample),
-        border_mode=border_mode,
-        filters_shape=W.get_value(borrow=True).shape,
-        message=message
-    )
-
-
-def make_sparse_random_conv2D(num_nonzero,
-                              input_space,
-                              output_space,
-                              kernel_shape,
-                              batch_size,
-                              subsample=(1, 1),
-                              border_mode='valid',
-                              message="",
-                              rng=None):
-
-    """
-    .. todo::
-
-        WRITEME properly
-
-    Creates a Cudnn2D with random kernels, where the randomly initialized
-    values are sparse
-
-    Parameters
-    ----------
-    num_nonzero : TODO
-    input_space : TODO
-    output_space : TODO
-    kernel_shape : TODO
-    batch_size : TODO
-    subsample : TODO, optional
-    border_mode : TODO, optional
-    message : TODO, optional
-    rng : TODO, optional
-
-    """
-
-    raise AssertionError(
-        "TODO: I think this is a bug--num_nonzero "
-        "determines the total number of nonzero elements in the "
-        "whole kernel stack, not the number of non-zero elements per "
-        "kernel. Investigate what it's meant to do."
-    )
-
-    rng = make_np_rng(rng, default_sparse_seed,
-                      which_method=['randn', 'randint'])
-
-    W = np.zeros((output_space.num_channels, input_space.num_channels,
-                  kernel_shape[0], kernel_shape[1]))
-
-    def random_coord():
-        return [rng.randint(dim) for dim in W.shape]
-
-    for i in range(num_nonzero):
-        o, ch, r, c = random_coord()
-        while W[o, ch, r, c] != 0:
-            o, ch, r, c = random_coord()
-        W[o, ch, r, c] = rng.randn()
-
-    W = sharedX(W)
-
-    return Cudnn2D(
-        filters=W,
-        batch_size=batch_size,
-        input_space=input_space,
-        output_axes=output_space.axes,
-        subsample=subsample,
-        border_mode=border_mode,
-        filters_shape=W.get_value(borrow=True).shape,
-        message=message
-    )

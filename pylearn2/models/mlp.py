@@ -3015,10 +3015,7 @@ class ConvElemwise(Layer):
             kwargs['num_nonzero'] = self.sparse_init
 
         elif self.istd is not None:
-            if dnn_available():
-                raise NotImplementedError("Need to implement istd with CuDNN")
-
-            f = conv2d.make_normal_conv2d
+            f = conv2d.make_normal_conv2D
             kwargs['istd'] = self.istd
 
         else:

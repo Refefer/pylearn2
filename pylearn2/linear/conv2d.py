@@ -252,7 +252,7 @@ class Conv2D(OrigConv2D):
 def make_conv2D(make_weights, input_space, output_space,
                kernel_shape, batch_size=None,
                subsample = (1,1), border_mode = 'valid',
-               message = ""):
+               message = "", cls=Conv2D):
     """
     .. todo::
 
@@ -263,7 +263,7 @@ def make_conv2D(make_weights, input_space, output_space,
 
     W = make_weights(**locals())
 
-    return Conv2D(
+    return cls(
         filters=W,
         batch_size=batch_size,
         input_space=input_space,
@@ -293,7 +293,7 @@ def make_random_conv2D(irange, rng=None, *args, **kwargs):
 
     return make_conv2D(make_weights, *args, **kwargs)
 
-def make_normal_conv2d(istd, rng=None, *args, **kwargs):
+def make_normal_conv2D(istd, rng=None, *args, **kwargs):
     """
     Initializes a set of filters with a mean of zero and the
     provided standard deviation.
@@ -309,9 +309,7 @@ def make_normal_conv2d(istd, rng=None, *args, **kwargs):
 
     return make_conv2D(make_weights, *args, **kwargs)
 
-def make_sparse_random_conv2D(num_nonzero, input_space, output_space,
-                              kernel_shape, batch_size, subsample=(1, 1),
-                              border_mode='valid', message="", rng=None):
+def make_sparse_random_conv2D(num_nonzero, rng=None, *args, **kwargs):
     """
     .. todo::
 
@@ -321,35 +319,22 @@ def make_sparse_random_conv2D(num_nonzero, input_space, output_space,
     values are sparse
     """
 
-    raise AssertionError(
-        "TODO: I think this is a bug--num_nonzero "
-        "determines the total number of nonzero elements in the "
-        "whole kernel stack, not the number of non-zero elements per "
-        "kernel. Investigate what it's meant to do."
-    )
+    def make_weights(input_space, output_space, kernel_shape, **kwargs):
+        rng = make_np_rng(rng, default_sparse_seed,
+                          which_method=['randn', 'randint'])
 
-    rng = make_np_rng(rng, default_sparse_seed,
-                      which_method=['randn', 'randint'])
+        W = np.zeros((output_space.num_channels, input_space.num_channels,
+                      kernel_shape[0], kernel_shape[1]))
 
-    W = np.zeros((output_space.num_channels, input_space.num_channels,
-                  kernel_shape[0], kernel_shape[1]))
+        random_coord = lambda: [rng.randint(dim) for dim in W.shape]
 
-    def random_coord():
-        return [rng.randint(dim) for dim in W.shape]
-
-    for i in xrange(num_nonzero):
-        o, ch, r, c = random_coord()
-        while W[o, ch, r, c] != 0:
+        for i in xrange(num_nonzero):
             o, ch, r, c = random_coord()
-        W[o, ch, r, c] = rng.randn()
+            while W[o, ch, r, c] != 0:
+                o, ch, r, c = random_coord()
 
-    W = sharedX(W)
+            W[o, ch, r, c] = rng.randn()
 
-    return Conv2D(
-        filters=W,
-        batch_size=batch_size,
-        input_space=input_space,
-        output_axes=output_space.axes,
-        subsample=subsample, border_mode=border_mode,
-        filters_shape=W.get_value(borrow=True).shape, message=message
-    )
+        return sharedX(W)
+
+    return make_conv2D(make_weights, *args, **kwargs)
