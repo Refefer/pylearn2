@@ -336,8 +336,10 @@ class SGD(TrainingAlgorithm):
 
         for param in grads:
             assert param in params
-        for param in params:
-            assert param in grads
+
+        # Strip out params not in gradients.  This is needed until 
+        # model.get_params is fixed.
+        params = [p for p in params if p in grads]
 
         for param in grads:
             if grads[param].name is None and cost_value is not None:
