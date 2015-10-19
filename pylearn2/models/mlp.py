@@ -2986,7 +2986,7 @@ class ConvElemwise(Layer):
                                  "ConvElemwise and not more." % names)
 
 
-    def initialize_transformer(self, rng):
+    def initialize_transformer(self, rng, space):
         """
         This function initializes the transformer of the class. Re-running
         this function will reset the transformer.
@@ -2997,7 +2997,7 @@ class ConvElemwise(Layer):
             random number generator object.
         """
         kwargs = dict(
-            input_space=self.input_space,
+            input_space=space,
             output_space=self.detector_space,
             kernel_shape=self.kernel_shape,
             subsample=self.kernel_stride,
@@ -3062,12 +3062,7 @@ class ConvElemwise(Layer):
 
         logger.info('Output space: {0}'.format(self.output_space.shape))
 
-    @wraps(Layer.set_input_space)
-    def set_input_space(self, space):
-        """ Note: this function will reset the parameters! """
-
-        self.input_space = space
-
+    def _set_transformer(self, space):
         if not isinstance(space, Conv2DSpace):
             raise BadInputSpaceError(self.__class__.__name__ +
                                      ".set_input_space "
@@ -3075,39 +3070,48 @@ class ConvElemwise(Layer):
                                      str(space) + " of type " +
                                      str(type(space)))
 
-        rng = self.mlp.rng
+        output_shape = []
+        for i in (0, 1):
+            output_shape.append(
+                int((space.shape[i] - self.kernel_shape[i]) / self.kernel_stride[i])
+            )
 
         if self.border_mode == 'valid':
-            output_shape = [int((self.input_space.shape[0]
-                                 - self.kernel_shape[0])
-                                / self.kernel_stride[0]) + 1,
-                            int((self.input_space.shape[1]
-                                 - self.kernel_shape[1])
-                                / self.kernel_stride[1]) + 1]
+            output_shape = [s + 1 for s in output_shape]
+
         elif self.border_mode == 'full':
-            output_shape = [int((self.input_space.shape[0]
-                                 + self.kernel_shape[0])
-                                / self.kernel_stride[0]) - 1,
-                            int((self.input_space.shape[1]
-                                 + self.kernel_shape[1])
-                                / self.kernel_stride[1]) - 1]
+            output_shape = [s - 1 for s in output_shape]
 
         self.detector_space = Conv2DSpace(shape=output_shape,
                                           num_channels=self.output_channels,
                                           axes=('b', 'c', 0, 1))
 
-        self.initialize_transformer(rng)
+        self.initialize_transformer(self.mlp.rng, space)
 
         W, = self.transformer.get_params()
         W.name = self.layer_name + '_W'
+        return W
 
+    def _set_biases(self, space):
         if self.tied_b:
-            self.b = sharedX(np.zeros((self.detector_space.num_channels)) +
+            b = sharedX(np.zeros((self.detector_space.num_channels)) +
                              self.init_bias)
         else:
-            self.b = sharedX(self.detector_space.get_origin() + self.init_bias)
+            b = sharedX(self.detector_space.get_origin() + self.init_bias)
 
-        self.b.name = self.layer_name + '_b'
+        b.name = self.layer_name + '_b'
+
+        return b
+
+    @wraps(Layer.set_input_space)
+    def set_input_space(self, space):
+        """ Note: this function will reset the parameters! """
+
+        self.input_space = space
+
+        self.W = self._set_transformer(space)
+
+        self.b = self._set_biases(space)
 
         logger.info('Input shape: {0}'.format(self.input_space.shape))
         logger.info('Detector space: {0}'.format(self.detector_space.shape))
