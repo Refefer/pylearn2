@@ -3281,8 +3281,6 @@ class ConvElemwise(Layer):
                           pool_stride=self.pool_stride,
                           image_shape=self.detector_space.shape)
 
-        self.output_space.validate(p)
-
         return p
 
     def _normalize_output(self, p):
@@ -3308,6 +3306,8 @@ class ConvElemwise(Layer):
             self.detector_space.validate(d)
 
         p = d if self.pool_type is None else self._apply_pooling(d)
+
+        self.output_space.validate(p)
 
         return self._normalize_output(p)
 
