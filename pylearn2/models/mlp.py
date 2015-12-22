@@ -2966,6 +2966,10 @@ class ConvElemwise(Layer):
         assert nonlinearity is not None
 
         self.nonlin = nonlinearity
+        zero_pad = border_mode == 'same'
+        if zero_pad:
+            border_mode = 'valid'
+
         self.__dict__.update(locals())
         assert monitor_style in ['classification', 'detection'], (
             "%s.monitor_style should be either"
@@ -3070,6 +3074,7 @@ class ConvElemwise(Layer):
                                      str(space) + " of type " +
                                      str(type(space)))
 
+
         output_shape = []
         for i in (0, 1):
             output_shape.append(
@@ -3103,11 +3108,38 @@ class ConvElemwise(Layer):
 
         return b
 
+    def _get_padded_space(self, inp):
+        ks = self.kernel_shape[0] / 2
+        return Conv2DSpace(shape=(inp.shape[0] + ks, inp.shape[1] + ks),
+                num_channels = inp.num_channels, axes=inp.axes)
+
+    def _pad(self, ds):
+        buff = self.kernel_shape[0] / 2
+        z_buff = buff + 1
+
+        # Zero pad
+        padding = [ds.shape[idx] for idx in xrange(4)]
+        slices = [slice(None)] * 4
+        for idx in (self.input_space.axes.index(k) for k in (0, 1)):
+            slices[idx] = slice(buff, -buff)
+            padding[idx] += z_buff
+
+        ds_padded = T.zeros(tuple(padding)) 
+
+        return T.set_subtensor(ds_padded[tuple(slices)], ds)
+
     @wraps(Layer.set_input_space)
     def set_input_space(self, space):
         """ Note: this function will reset the parameters! """
 
         self.input_space = space
+
+        if self.zero_pad:
+            y, x = space.shape
+            b = self.kernel_shape[0] / 2 + 1
+            space = Conv2DSpace(shape=(y+b, x+b), 
+                                num_channels=space.num_channels,
+                                axes=space.axes)
 
         self.W = self._set_transformer(space)
 
@@ -3239,7 +3271,11 @@ class ConvElemwise(Layer):
         """
         Applies the affine transform.
         """
+
         self.input_space.validate(state_below)
+
+        if self.zero_pad:
+            state_below = self._pad(state_below)
 
         z = self.transformer.lmul(state_below)
         if not hasattr(self, 'tied_b'):
@@ -3297,6 +3333,7 @@ class ConvElemwise(Layer):
 
     @wraps(Layer.fprop)
     def fprop(self, state_below):
+        
         z = self._transform_z(state_below)
 
         d = self._apply_nonlinearity(z)
