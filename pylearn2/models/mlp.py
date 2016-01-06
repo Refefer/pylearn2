@@ -3113,14 +3113,14 @@ class ConvElemwise(Layer):
         return Conv2DSpace(shape=(inp.shape[0] + ks, inp.shape[1] + ks),
                 num_channels = inp.num_channels, axes=inp.axes)
 
-    def _pad(self, ds):
+    def _pad(self, ds, space):
         buff = self.kernel_shape[0] / 2
         z_buff = buff + 1
 
         # Zero pad
         padding = [ds.shape[idx] for idx in xrange(4)]
         slices = [slice(None)] * 4
-        for idx in (self.input_space.axes.index(k) for k in (0, 1)):
+        for idx in (space.axes.index(k) for k in (0, 1)):
             slices[idx] = slice(buff, -buff)
             padding[idx] += z_buff
 
@@ -3275,7 +3275,7 @@ class ConvElemwise(Layer):
         self.input_space.validate(state_below)
 
         if self.zero_pad:
-            state_below = self._pad(state_below)
+            state_below = self._pad(state_below, self.input_space)
 
         z = self.transformer.lmul(state_below)
         if not hasattr(self, 'tied_b'):
