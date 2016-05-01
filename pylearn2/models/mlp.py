@@ -1905,6 +1905,7 @@ class Linear(Layer):
                  istdev=None,
                  sparse_init=None,
                  sparse_stdev=1.,
+                 sparse_vector=False,
                  include_prob=1.0,
                  init_bias=0.,
                  W_lr_scale=None,
@@ -2205,7 +2206,11 @@ class Linear(Layer):
             state_below = self.input_space.format_as(state_below,
                                                      self.desired_space)
 
-        z = self.transformer.lmul(state_below)
+        if self.sparse_vector:
+            z = self.transformer.slmul(state_below)
+        else:
+            z = self.transformer.lmul(state_below)
+
         if self.use_bias:
             z += self.b
 
@@ -2977,7 +2982,6 @@ class ConvElemwise(Layer):
         del self.self
 
     def _validate_init(self, irange, istd, sparse_init):
-        print istd, irange, sparse_init
         names = 'irange, istd, or sparse_init'
         num = sum(v is not None for v in (irange, istd, sparse_init))
         if num == 0:
@@ -4181,6 +4185,14 @@ class CompositeLayer(Layer):
         del self.self
 
     @property
+    def unique_layers(self):
+        seen = set()
+        for layer in self.layers:
+            if layer.layer_name not in seen:
+                yield layer
+                seen.add(layer.layer_name)
+
+    @property
     def routing_needed(self):
         return self.inputs_to_layers is not None
 
@@ -4232,7 +4244,7 @@ class CompositeLayer(Layer):
     @wraps(Layer.get_params)
     def get_params(self):
         rval = []
-        for layer in self.layers:
+        for layer in self.unique_layers:
             rval = safe_union(layer.get_params(), rval)
 
         return rval
@@ -4330,7 +4342,7 @@ class CompositeLayer(Layer):
     @wraps(Layer.set_mlp)
     def set_mlp(self, mlp):
         super(CompositeLayer, self).set_mlp(mlp)
-        for layer in self.layers:
+        for layer in self.unique_layers:
             layer.set_mlp(mlp)
 
     @wraps(Layer.get_layer_monitoring_channels)
@@ -4354,7 +4366,7 @@ class CompositeLayer(Layer):
 
     @wraps(Model._modify_updates)
     def _modify_updates(self, updates):
-        for layer in self.layers:
+        for layer in self.unique_layers:
             layer.modify_updates(updates)
 
     @wraps(Layer.get_lr_scalers)
