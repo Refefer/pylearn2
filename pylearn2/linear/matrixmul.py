@@ -10,8 +10,13 @@ __license__ = "3-clause BSD"
 __maintainer__ = "LISA Lab"
 __email__ = "pylearn-dev@googlegroups"
 
+import theano
 from theano.compat.six.moves import xrange
 from theano import tensor as T
+if theano.__version__ >= '0.8.0':
+    import theano.sparse as sparse
+else:
+    sparse = None
 
 from pylearn2.linear.linear_transform import LinearTransform
 import functools
@@ -54,6 +59,16 @@ class MatrixMul(LinearTransform):
             WRITEME
         """
         return [self._W]
+
+    def slmul(self, x):
+        """
+            
+        """
+        if theano.__version__ < '0.8.0':
+            return self.lmul(x)
+        
+        xs = sparse.csc_from_dense(x)
+        return sparse.structured_dot(xs, self._W)
 
     def lmul(self, x):
         """
