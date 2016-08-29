@@ -35,7 +35,6 @@ class GSNFriendlyCost(DefaultDataSpecsMixin, Cost):
         X = data
         return self.cost(X, model.reconstruct(X))
 
-
 class MeanSquaredReconstructionError(GSNFriendlyCost):
     """
     .. todo::
