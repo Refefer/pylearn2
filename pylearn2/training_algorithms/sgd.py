@@ -158,7 +158,7 @@ class SGD(TrainingAlgorithm):
                  set_batch_size = False,
                  train_iteration_mode = None, batches_per_iter=None,
                  theano_function_mode = None, monitoring_costs=None,
-                 seed=[2012, 10, 5]):
+                 compile_loss_function=False, seed=[2012, 10, 5]):
 
         if isinstance(cost, (list, tuple, set)):
             raise TypeError("SGD no longer supports using collections of " +
@@ -192,6 +192,7 @@ class SGD(TrainingAlgorithm):
         self.rng = make_np_rng(seed, which_method=["randn","randint"])
         self.theano_function_mode = theano_function_mode
         self.monitoring_costs = monitoring_costs
+        self.compile_loss_function = compile_loss_function
 
     def _setup_monitor(self):
         """
@@ -339,7 +340,14 @@ class SGD(TrainingAlgorithm):
 
         # Strip out params not in gradients.  This is needed until 
         # model.get_params is fixed.
-        params = [p for p in params if p in grads]
+        nps = []
+        for p in params:
+            if p in grads:
+                nps.append(p)
+            else:
+                logging.warn("Parameter %s not learning!" % p)
+
+        params = nps
 
         for param in grads:
             if grads[param].name is None and cost_value is not None:
@@ -400,10 +408,20 @@ class SGD(TrainingAlgorithm):
 
         with log_timing(log, 'Compiling sgd_update'):
             self.sgd_update = function(theano_args,
+                                       outputs=[cost_value] if self.compile_loss_function else [],
                                        updates=updates,
                                        name='sgd_update',
                                        on_unused_input='ignore',
                                        mode=self.theano_function_mode)
+
+        if self.compile_loss_function:
+            with log_timing(log, 'Compiling sgd_loss'):
+                self.sgd_loss = function(theano_args,
+                                         [cost_value],
+                                         name='sgd_loss',
+                                         on_unused_input='ignore',
+                                         mode=self.theano_function_mode)
+
         self.params = params
 
     def train(self, dataset):
