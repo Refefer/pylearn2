@@ -17,7 +17,7 @@ from pylearn2.utils import wraps
 from pylearn2.monitor import Monitor
 
 
-class LearningRule():
+class LearningRule(object):
     """
     A pylearn2 learning rule is an object which computes new parameter values
     given (1) a learning rate (2) current parameter values and (3) the current
@@ -464,6 +464,9 @@ class RMSProp(LearningRule):
         Therefore, this method should only get called once for each
         instance of RMSProp.
         """
+
+        if lr_scalers is None:
+            lr_scalers = {}
 
         updates = OrderedDict()
         for param in grads:
