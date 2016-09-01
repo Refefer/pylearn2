@@ -70,6 +70,15 @@ class MatrixMul(LinearTransform):
         xs = sparse.csc_from_dense(x)
         return sparse.structured_dot(xs, self._W)
 
+    def sslmul(self, x):
+        """
+            
+        """
+        if theano.__version__ < '0.8.0':
+            return self.lmul(x)
+        
+        return sparse.structured_dot(x, self._W)
+
     def lmul(self, x):
         """
         .. todo::

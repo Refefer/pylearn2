@@ -1905,7 +1905,6 @@ class Linear(Layer):
                  istdev=None,
                  sparse_init=None,
                  sparse_stdev=1.,
-                 sparse_vector=False,
                  include_prob=1.0,
                  init_bias=0.,
                  W_lr_scale=None,
@@ -2206,8 +2205,9 @@ class Linear(Layer):
             state_below = self.input_space.format_as(state_below,
                                                      self.desired_space)
 
-        if self.sparse_vector:
-            z = self.transformer.slmul(state_below)
+        if self.input_space.sparse:
+            z = self.transformer.sslmul(state_below)
+
         else:
             z = self.transformer.lmul(state_below)
 
