@@ -158,7 +158,8 @@ class SGD(TrainingAlgorithm):
                  set_batch_size = False,
                  train_iteration_mode = None, batches_per_iter=None,
                  theano_function_mode = None, monitoring_costs=None,
-                 compile_loss_function=False, seed=[2012, 10, 5]):
+                 compile_loss_function=False, 
+                 compile_gradients=False, seed=[2012, 10, 5]):
 
         if isinstance(cost, (list, tuple, set)):
             raise TypeError("SGD no longer supports using collections of " +
@@ -193,6 +194,7 @@ class SGD(TrainingAlgorithm):
         self.theano_function_mode = theano_function_mode
         self.monitoring_costs = monitoring_costs
         self.compile_loss_function = compile_loss_function
+        self.compile_gradients = compile_gradients
 
     def _setup_monitor(self):
         """
@@ -419,6 +421,16 @@ class SGD(TrainingAlgorithm):
                 self.sgd_loss = function(theano_args,
                                          [cost_value],
                                          name='sgd_loss',
+                                         on_unused_input='ignore',
+                                         mode=self.theano_function_mode)
+
+        if self.compile_gradients:
+            with log_timing(log, 'Compiling sgd_grads'):
+                self.grads, vals = zip(*grads.iteritems())
+                self.grad_names = [g.name for g in self.grads]
+                self.sgd_grads = function(theano_args,
+                                         vals,
+                                         name='sgd_grads',
                                          on_unused_input='ignore',
                                          mode=self.theano_function_mode)
 
