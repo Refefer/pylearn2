@@ -2205,7 +2205,7 @@ class Linear(Layer):
             state_below = self.input_space.format_as(state_below,
                                                      self.desired_space)
 
-        if self.input_space.sparse:
+        if isinstance(self.input_space, VectorSpace) and self.input_space.sparse:
             z = self.transformer.sslmul(state_below)
 
         else:
