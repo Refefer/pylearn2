@@ -45,6 +45,7 @@ setup(
         'numpy', 
         'pyyaml', 
         'argparse', 
+        'six', 
         "Theano"],
     scripts=['bin/pylearn2-plot-monitor', 'bin/pylearn2-print-monitor',
              'bin/pylearn2-show-examples', 'bin/pylearn2-show-weights',
